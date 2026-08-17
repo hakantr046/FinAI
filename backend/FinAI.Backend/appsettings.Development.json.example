@@ -1,0 +1,9 @@
+{
+  "Jwt": {
+    "Key": "generate_a_random_32+_char_secret_here"
+  },
+  "Email": {
+    "SenderEmail": "your_gmail_address@gmail.com",
+    "SenderPassword": "your_gmail_app_password_here"
+  }
+}

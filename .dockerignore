@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/bin
+**/obj
+**/.venv
+**/.venv-1
+**/__pycache__
+.git
+Ekranlar_extracted
+dashboard_extracted
+*.zip

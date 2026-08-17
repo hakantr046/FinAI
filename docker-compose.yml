@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: finai_postgres
+    environment:
+      POSTGRES_DB: finaidb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d finaidb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ai_service:
+    build:
+      context: ./src/ai_service
+      dockerfile: Dockerfile
+    container_name: finai_ai_service
+    ports:
+      - "50051:50051"
+    env_file:
+      - path: ./src/ai_service/.env
+        required: false
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/FinAI.Backend/Dockerfile
+    container_name: finai_backend
+    ports:
+      - "5115:5115"
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=finaidb;Username=postgres;Password=postgres
+      - Jwt__Key=${JWT_KEY:-}
+      - Email__SenderEmail=${EMAIL_SENDER:-}
+      - Email__SenderPassword=${EMAIL_SENDER_PASSWORD:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai_service:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+    container_name: finai_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:5115
+    depends_on:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    container_name: finai_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: finai_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:

@@ -1,0 +1,307 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: oklch(0.984 0.004 95);
+  --foreground: oklch(0.22 0.012 260);
+  --card: #ffffff;
+  --surface-alt: oklch(0.965 0.005 95);
+  --border: oklch(0.9 0.006 95);
+  --text-muted: oklch(0.5 0.012 260);
+  --text-faint: oklch(0.62 0.01 260);
+  --primary: oklch(0.42 0.11 258);
+  --primary-light: oklch(0.52 0.11 258);
+  --accent-soft: oklch(0.94 0.025 258);
+  --accent: #8b5cf6;
+  --success: oklch(0.5 0.11 155);
+  --success-soft: oklch(0.95 0.03 155);
+  --warning: oklch(0.6 0.13 80);
+  --warning-soft: oklch(0.96 0.04 80);
+  --danger: oklch(0.55 0.15 25);
+  --danger-soft: oklch(0.96 0.03 25);
+  --info: #06b6d4;
+  --muted: oklch(0.5 0.012 260);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+/* ====== FLAT CARD SYSTEM ====== */
+.glass-card {
+  background: var(--card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border);
+  box-shadow: none;
+  transition: border-color 0.2s ease;
+}
+/* Neutralize legacy heavy-elevation utility classes still present on pages */
+.glass-card.shadow-xl, .glass-card.shadow-lg, .glass-card.shadow-md, .glass-card.shadow-sm {
+  box-shadow: none;
+}
+.glass-card.rounded-3xl, .glass-card.rounded-2xl {
+  border-radius: 14px;
+}
+
+.glass-card-hover:hover {
+  box-shadow: none;
+  transform: none;
+  border-color: var(--primary);
+}
+
+.glass-sidebar {
+  background: var(--card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-right: 1px solid var(--border);
+  box-shadow: none;
+}
+
+/* ====== BUTTONS ====== */
+.btn-gradient {
+  background: var(--primary);
+  color: white;
+  transition: background-color 0.2s ease;
+  box-shadow: none;
+}
+.btn-gradient:hover {
+  background: oklch(0.36 0.11 258);
+  box-shadow: none;
+  transform: none;
+}
+.btn-gradient:active { transform: none; }
+.btn-gradient:disabled {
+  background: var(--text-faint);
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+}
+
+/* ====== INPUTS ====== */
+.input-light {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  transition: all 0.2s ease;
+}
+.input-light:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px oklch(0.42 0.11 258 / 0.12);
+  background: var(--card);
+  outline: none;
+}
+.input-light::placeholder { color: var(--text-faint); }
+
+select.input-light {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25em 1.25em;
+  padding-right: 2.5rem;
+}
+
+/* ====== SCROLLBAR ====== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 100px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ====== ANIMATIONS ====== */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+
+@keyframes logo-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.6)) drop-shadow(0 0 24px rgba(139, 92, 246, 0.4));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 20px rgba(6, 182, 212, 0.8)) drop-shadow(0 0 35px rgba(99, 102, 241, 0.6));
+    transform: scale(1.04);
+  }
+}
+
+@keyframes logo-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(12deg) scale(1.1); }
+  75% { transform: rotate(-12deg) scale(1.1); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.animate-fade-in { animation: fade-in 0.4s ease-out forwards; }
+.animate-slide-up { animation: slide-up 0.5s ease-out forwards; }
+.animate-float { animation: none; }
+.animate-logo-glow { animation: none; filter: none; }
+.animate-logo-spin { animation: none; transform: none; }
+
+.stagger-1 { animation-delay: 0.05s; opacity: 0; }
+.stagger-2 { animation-delay: 0.1s; opacity: 0; }
+.stagger-3 { animation-delay: 0.15s; opacity: 0; }
+.stagger-4 { animation-delay: 0.2s; opacity: 0; }
+
+/* ====== PROGRESS BAR ====== */
+.progress-bar-animated { transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+
+/* ====== TABLE ====== */
+.table-row-hover { transition: all 0.15s ease; }
+.table-row-hover:hover { background: rgba(99, 102, 241, 0.03); }
+
+/* ====== GRADIENT TEXT (kept plain to match flat design) ====== */
+.gradient-text {
+  color: var(--foreground);
+}
+
+/* ====== DECORATIVE BLOBS (disabled — flat design has no ambient glow) ====== */
+.blob-1, .blob-2 {
+  display: none;
+}
+
+/* ====== NAV ITEM ====== */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5625rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.84375rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+.nav-item:hover {
+  background: var(--surface-alt);
+  color: var(--foreground);
+}
+.nav-item.active {
+  background: var(--accent-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ====== DARK MODE STYLES ====== */
+html.dark body {
+  --background: oklch(0.19 0.008 260);
+  --foreground: oklch(0.95 0.004 260);
+  --card: oklch(0.235 0.01 260);
+  --surface-alt: oklch(0.27 0.012 260);
+  --border: oklch(0.33 0.014 260);
+  --text-muted: oklch(0.68 0.012 260);
+  --text-faint: oklch(0.52 0.012 260);
+  --primary: oklch(0.74 0.1 258);
+  --accent-soft: oklch(0.3 0.05 258);
+  --success: oklch(0.72 0.11 155);
+  --success-soft: oklch(0.28 0.05 155);
+  --danger: oklch(0.72 0.13 25);
+  --danger-soft: oklch(0.3 0.06 25);
+  --warning: oklch(0.78 0.11 80);
+  --warning-soft: oklch(0.32 0.05 80);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+html.dark .glass-card {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+html.dark .glass-card-hover:hover {
+  box-shadow: none;
+  border-color: var(--primary);
+}
+
+html.dark .glass-sidebar {
+  background: var(--card);
+  border-right-color: var(--border);
+}
+
+html.dark .input-light {
+  background: var(--surface-alt);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+html.dark .input-light:focus {
+  border-color: var(--primary);
+  background: var(--card);
+}
+
+html.dark .input-light::placeholder {
+  color: var(--text-faint);
+}
+
+html.dark .nav-item {
+  color: var(--text-muted);
+}
+
+html.dark .nav-item:hover {
+  background: var(--surface-alt);
+  color: var(--foreground);
+}
+
+html.dark .nav-item.active {
+  background: var(--accent-soft);
+  color: var(--primary);
+}
+
+html.dark .table-row-hover:hover {
+  background: var(--surface-alt);
+}
+
+/* ====== SKELETON ANIMATION ====== */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.25; }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background-color: var(--border);
+}
+
+html.dark .skeleton-pulse {
+  background-color: var(--surface-alt);
+}
+
+/* ====== HIDE NEXT.JS DEV INDICATOR BADGE ====== */
+[data-nextjs-toast],
+[data-nextjs-dialog-overlay],
+[data-nextjs-toast-wrapper],
+next-js-internal-dev-tools,
+#next-logo-badge,
+button[aria-label="Next.js Dev Tools"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+

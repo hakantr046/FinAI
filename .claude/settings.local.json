@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet watch *)",
+      "Bash(mkdir -p \"/tmp/ekranlar_extract\")",
+      "Bash(unzip -o \"Ekranlar profesyonel tasarım.zip\" -d \"Ekranlar_extracted\")",
+      "Bash(mkdir -p frontend/public/brand)",
+      "Bash(cp \"Ekranlar_extracted/assets/finai-logo-icon.png\" frontend/public/brand/)",
+      "Bash(cp \"Ekranlar_extracted/assets/finai-logo-full.png\" frontend/public/brand/)"
+    ]
+  }
+}
