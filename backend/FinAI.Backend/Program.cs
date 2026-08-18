@@ -60,7 +60,11 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Sadece "Admin" rolüne sahip JWT taşıyanlar admin uçlarına erişebilir
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+});
 
 // CORS Politikası
 builder.Services.AddCors(options =>
@@ -118,7 +122,7 @@ app.MapPost("/api/auth/register", async (RegisterDto dto, AppDbContext dbContext
             Email = normalizedEmail,
             Name = string.IsNullOrWhiteSpace(dto.Name) ? normalizedEmail : dto.Name.Trim(),
             PasswordHash = passwordHash,
-            IsAdmin = isFirstUser || normalizedEmail.StartsWith("admin")
+            IsAdmin = isFirstUser
         };
 
         dbContext.Users.Add(user);
@@ -217,7 +221,7 @@ app.MapPost("/api/auth/google", async (GoogleLoginDto dto, AppDbContext dbContex
                 Email = normalizedEmail,
                 Name = string.IsNullOrWhiteSpace(payload.Name) ? normalizedEmail : payload.Name,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))),
-                IsAdmin = isFirstUser || normalizedEmail.StartsWith("admin")
+                IsAdmin = isFirstUser
             };
             dbContext.Users.Add(user);
             await dbContext.SaveChangesAsync();
@@ -339,21 +343,19 @@ app.MapPost("/api/auth/forgot-password", async (ForgotPasswordDto dto, AppDbCont
         // E-Posta gönder
         var isSent = await emailService.SendPasswordResetEmailAsync(user.Email, resetLink);
 
+        // Güvenlik: sıfırlama token'ı yalnızca e-posta ile iletilir, API cevabında asla döndürülmez.
         if (isSent)
         {
             return Results.Ok(new
             {
-                message = $"Şifre sıfırlama e-postası {user.Email} adresine başarıyla iletildi! Lütfen Gmail kutunuzu kontrol edin.",
-                token = resetToken
+                message = $"Şifre sıfırlama e-postası {user.Email} adresine gönderildi. Lütfen e-posta kutunuzu kontrol edin."
             });
         }
         else
         {
             return Results.Ok(new
             {
-                message = $"Google SMTP Şifre Hatası (535 Bad Credentials). Google 'dtic ettl eico hbf' kodunu reddetti. Lütfen yeni bir Uygulama Şifresi oluşturun veya aşağıdaki bağlantıdan test edin:",
-                resetLink = resetLink,
-                token = resetToken
+                message = "Şifre sıfırlama talebiniz alındı ancak e-posta gönderimi şu an yapılandırılmamış. Lütfen sistem yöneticisiyle iletişime geçin."
             });
         }
     }
@@ -386,13 +388,15 @@ app.MapPost("/api/auth/reset-password", async (ResetPasswordDto dto, AppDbContex
             return Results.NotFound(new { message = "Bu e-posta adresine ait kullanıcı bulunamadı." });
         }
 
-        // Token varsa doğrula
-        if (!string.IsNullOrWhiteSpace(dto.Token))
+        // Token ZORUNLU: geçerli, süresi dolmamış ve kullanıcıya ait olmalı.
+        // Token olmadan şifre sıfırlanamaz (aksi halde e-posta bilen herkes hesabı ele geçirebilirdi).
+        if (string.IsNullOrWhiteSpace(dto.Token) ||
+            string.IsNullOrWhiteSpace(user.ResetToken) ||
+            user.ResetToken != dto.Token ||
+            !user.ResetTokenExpiresAt.HasValue ||
+            user.ResetTokenExpiresAt.Value < DateTime.UtcNow)
         {
-            if (user.ResetToken != dto.Token || !user.ResetTokenExpiresAt.HasValue || user.ResetTokenExpiresAt.Value < DateTime.UtcNow)
-            {
-                return Results.BadRequest(new { message = "Geçersiz veya süresi dolmuş sıfırlama bağlantısı." });
-            }
+            return Results.BadRequest(new { message = "Geçersiz veya süresi dolmuş sıfırlama bağlantısı." });
         }
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
@@ -759,7 +763,7 @@ app.MapDelete("/api/budgets/{budgetId}", async (Guid budgetId, AppDbContext dbCo
 // ---------------------------------------------------------
 // ENDPOINT 9: CSV Banka Ekstresi Toplu İçe Aktarma (Bulk Import)
 // ---------------------------------------------------------
-app.MapPost("/api/transactions/import", async (HttpRequest request, AppDbContext dbContext, IAiClientService aiClient, IPiiMaskingService piiMasker) =>
+app.MapPost("/api/transactions/import", async (HttpRequest request, ClaimsPrincipal principal, AppDbContext dbContext, IAiClientService aiClient, IPiiMaskingService piiMasker) =>
 {
     try
     {
@@ -775,14 +779,15 @@ app.MapPost("/api/transactions/import", async (HttpRequest request, AppDbContext
             return Results.BadRequest(new { message = "Dosya yüklenmedi veya dosya boş." });
         }
 
-        var userId = form["userId"].ToString();
+        // Kullanıcı kimliği istemciden değil, doğrulanmış JWT'den alınır
+        var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
         var dateColumn = form["dateColumn"].ToString();
         var descriptionColumn = form["descriptionColumn"].ToString();
         var amountColumn = form["amountColumn"].ToString();
 
         if (string.IsNullOrWhiteSpace(userId))
         {
-            return Results.BadRequest(new { message = "Kullanıcı ID gereklidir." });
+            return Results.Unauthorized();
         }
 
         var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId);
@@ -939,28 +944,33 @@ app.MapPost("/api/transactions/import", async (HttpRequest request, AppDbContext
     {
         return Results.BadRequest(new { message = $"CSV aktarım hatası: {ex.Message}" });
     }
-}).RequireRateLimiting("gemini-policy").DisableAntiforgery().AllowAnonymous();
+}).RequireRateLimiting("gemini-policy").DisableAntiforgery().RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.1: Fiş Görseli Yükleme & Gemini Vision OCR Analizi
 // ---------------------------------------------------------
-app.MapPost("/api/receipts/upload", async (HttpRequest request, AppDbContext dbContext, IAiClientService aiClient) =>
+app.MapPost("/api/receipts/upload", async (HttpRequest request, ClaimsPrincipal principal, AppDbContext dbContext, IAiClientService aiClient) =>
 {
     try
     {
         byte[] imageBytes;
         string contentType;
-        string userId;
+        // Kullanıcı kimliği istemciden değil, doğrulanmış JWT'den alınır
+        string userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Results.Unauthorized();
+        }
 
         if (request.HasFormContentType)
         {
             var form = await request.ReadFormAsync();
             var file = form.Files.GetFile("file");
-            userId = form["userId"].ToString();
 
-            if (file == null || file.Length == 0 || string.IsNullOrWhiteSpace(userId))
+            if (file == null || file.Length == 0)
             {
-                return Results.BadRequest(new { message = "Geçersiz dosya veya kullanıcı ID." });
+                return Results.BadRequest(new { message = "Geçersiz dosya." });
             }
 
             using var ms = new MemoryStream();
@@ -975,13 +985,12 @@ app.MapPost("/api/receipts/upload", async (HttpRequest request, AppDbContext dbC
             using var doc = System.Text.Json.JsonDocument.Parse(bodyText);
             var root = doc.RootElement;
 
-            userId = root.GetProperty("userId").GetString() ?? "";
             var imageBase64 = root.GetProperty("imageBase64").GetString() ?? "";
             contentType = root.TryGetProperty("mimeType", out var mimeProp) ? mimeProp.GetString() ?? "image/jpeg" : "image/jpeg";
 
-            if (string.IsNullOrWhiteSpace(imageBase64) || string.IsNullOrWhiteSpace(userId))
+            if (string.IsNullOrWhiteSpace(imageBase64))
             {
-                return Results.BadRequest(new { message = "Geçersiz görsel verisi veya kullanıcı ID." });
+                return Results.BadRequest(new { message = "Geçersiz görsel verisi." });
             }
 
             if (imageBase64.Contains(","))
@@ -1042,7 +1051,7 @@ app.MapPost("/api/receipts/upload", async (HttpRequest request, AppDbContext dbC
     {
         return Results.BadRequest(new { message = $"Fiş yükleme hatası: {ex.Message}" });
     }
-}).RequireRateLimiting("gemini-policy").DisableAntiforgery().AllowAnonymous();
+}).RequireRateLimiting("gemini-policy").DisableAntiforgery().RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.2: Fişi İşlem Olarak Onaylama & Kaydetme
@@ -2007,7 +2016,7 @@ app.MapGet("/api/admin/stats", async (AppDbContext dbContext) =>
     {
         return Results.BadRequest(new { message = $"İstatistikler alınırken hata: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization("AdminOnly");
 
 // ---------------------------------------------------------
 // ENDPOINT 14: Admin - Tüm Kullanıcıları Listele
@@ -2036,7 +2045,7 @@ app.MapGet("/api/admin/users", async (AppDbContext dbContext) =>
     {
         return Results.BadRequest(new { message = $"Kullanıcı listesi alınırken hata: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization("AdminOnly");
 
 // ---------------------------------------------------------
 // ENDPOINT 15: Admin - Kullanıcı Sil
@@ -2060,7 +2069,7 @@ app.MapDelete("/api/admin/users/{id}", async (Guid id, AppDbContext dbContext) =
     {
         return Results.BadRequest(new { message = $"Kullanıcı silinirken hata: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization("AdminOnly");
 
 // ---------------------------------------------------------
 // ENDPOINT 16: Admin - Yetki Değiştir (Toggle Admin)
@@ -2084,7 +2093,7 @@ app.MapPost("/api/admin/users/{id}/toggle-admin", async (Guid id, AppDbContext d
     {
         return Results.BadRequest(new { message = $"Rol değiştirilirken hata: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization("AdminOnly");
 
 // ---------------------------------------------------------
 // ENDPOINT 17: Admin - Yeni Kullanıcı Oluştur (Create User)
@@ -2123,7 +2132,7 @@ app.MapPost("/api/admin/users", async (CreateAdminUserDto dto, AppDbContext dbCo
     {
         return Results.BadRequest(new { message = $"Kullanıcı oluşturulurken hata: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization("AdminOnly");
 
 // ---------------------------------------------------------
 // ENDPOINT 18: Admin - Kullanıcı Güncelle (Update User)
@@ -2158,7 +2167,7 @@ app.MapPut("/api/admin/users/{id}", async (Guid id, UpdateAdminUserDto dto, AppD
     {
         return Results.BadRequest(new { message = $"Kullanıcı güncellenirken hata: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization("AdminOnly");
 
 // Uygulama başlarken varsayılan admin@finai.com kullanıcısını otomatik oluştur ve yönetici yap
 using (var scope = app.Services.CreateScope())
