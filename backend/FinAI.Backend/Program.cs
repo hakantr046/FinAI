@@ -507,7 +507,7 @@ app.MapGet("/api/transactions/{userId}", async (string userId, string? range, Ap
                 Amount = t.Amount,
                 Category = t.Category,
                 MerchantOrTitle = t.MerchantOrTitle,
-                TransactionDate = t.CreatedAt.ToString("yyyy-MM-dd"),
+                TransactionDate = t.CreatedAt.AddHours(3).ToString("yyyy-MM-dd"),
                 ConfidenceScore = t.ConfidenceScore
             }
         })

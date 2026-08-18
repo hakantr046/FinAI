@@ -8,9 +8,10 @@ import {
   Repeat, 
   Bell, 
   Target, 
-  Briefcase, 
-  Shield, 
-  LogOut 
+  Briefcase,
+  Shield,
+  Mail,
+  LogOut
 } from 'lucide-react';
 import { logout, fetchWithAuth } from '../lib/apiClient';
 
@@ -52,6 +53,7 @@ export default function Sidebar() {
     { label: 'Bildirim & Anomali', path: '/notifications', icon: Bell, badge: unreadCount },
     { label: 'Finansal Hedefler', path: '/goals', icon: Target },
     { label: 'Esnaf KDV & Aile Bütçesi', path: '/niche', icon: Briefcase },
+    { label: 'İletişim', path: '/contact', icon: Mail },
   ];
 
   if (user?.isAdmin) {

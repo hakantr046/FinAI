@@ -36,6 +36,7 @@ services:
       - "5115:5115"
     environment:
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=finaidb;Username=postgres;Password=postgres
+      - AiService__GrpcAddress=http://ai_service:50051
       - Jwt__Key=${JWT_KEY:-}
       - Email__SenderEmail=${EMAIL_SENDER:-}
       - Email__SenderPassword=${EMAIL_SENDER_PASSWORD:-}

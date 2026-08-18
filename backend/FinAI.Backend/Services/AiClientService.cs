@@ -18,7 +18,12 @@ public interface IAiClientService
 
 public class AiClientService : IAiClientService
 {
-    private readonly string _grpcAddress = "http://localhost:50051";
+    private readonly string _grpcAddress;
+
+    public AiClientService(IConfiguration config)
+    {
+        _grpcAddress = config["AiService:GrpcAddress"] ?? "http://localhost:50051";
+    }
 
     public async Task<TransactionResponse> ProcessTransactionAsync(string userId, string inputText)
     {

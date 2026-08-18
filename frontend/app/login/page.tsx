@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
-import { Sparkles, Lock, Mail, TrendingUp, Shield, Zap, ArrowRight, Eye, EyeOff, Sun, Moon } from 'lucide-react';
+import { Sparkles, Lock, Mail, TrendingUp, Shield, Zap, ArrowRight, Eye, EyeOff, Sun, Moon, Info } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -229,6 +229,32 @@ export default function LoginPage() {
       <div className={`flex-1 flex items-center justify-center p-6 sm:p-12 relative select-none transition-colors duration-500 ${
         isDarkMode ? 'bg-slate-900 text-white' : 'bg-stone-50 text-slate-900'
       }`}>
+        {/* Top Links: Hakkımızda / İletişim */}
+        <div className="absolute top-6 left-6 z-50 flex items-center gap-2.5">
+          <Link
+            href="/about"
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-semibold transition-all cursor-pointer ${
+              isDarkMode
+                ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-sm'
+            }`}
+          >
+            <Info className="w-4 h-4 text-indigo-400" />
+            <span>Hakkımızda</span>
+          </Link>
+          <Link
+            href="/contact"
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-semibold transition-all cursor-pointer ${
+              isDarkMode
+                ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-sm'
+            }`}
+          >
+            <Mail className="w-4 h-4 text-indigo-400" />
+            <span>İletişim</span>
+          </Link>
+        </div>
+
         {/* Top Right Theme Switcher Button */}
         <div className="absolute top-6 right-6 z-50">
           <button
