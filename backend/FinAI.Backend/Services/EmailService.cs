@@ -26,7 +26,7 @@ public class EmailService : IEmailService
         {
             var smtpHost = _config["Email:SmtpHost"] ?? "smtp.gmail.com";
             var smtpPort = int.Parse(_config["Email:SmtpPort"] ?? "587");
-            var senderEmail = _config["Email:SenderEmail"] ?? "hakanugur046@gmail.com";
+            var senderEmail = _config["Email:SenderEmail"] ?? "";
             var senderPassword = (_config["Email:SenderPassword"] ?? "").Replace(" ", "");
 
             if (string.IsNullOrWhiteSpace(senderPassword))
