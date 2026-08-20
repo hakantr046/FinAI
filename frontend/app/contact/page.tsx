@@ -38,7 +38,7 @@ export default function ContactPage() {
   };
 
   const contactInfo = [
-    { icon: Mail, label: 'E-posta', value: 'destek@finai.app' },
+    { icon: Mail, label: 'E-posta', value: 'finai.supportdesk@gmail.com' },
   ];
 
   const content = (
