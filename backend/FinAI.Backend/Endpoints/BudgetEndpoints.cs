@@ -14,11 +14,11 @@ public static class BudgetEndpoints
 {
     public static void MapBudgetEndpoints(this WebApplication app)
     {
-app.MapGet("/api/budgets/summary/{userId}", async (string userId, AppDbContext dbContext) =>
+app.MapGet("/api/budgets/summary/{userId}", async (ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId);
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -55,21 +55,21 @@ app.MapGet("/api/budgets/summary/{userId}", async (string userId, AppDbContext d
     {
         return Results.BadRequest(new { message = $"Bütçe özeti getirilirken hata oluştu: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 7: Bütçe Limiti Ekleme veya Güncelleme (Upsert)
 // ---------------------------------------------------------
-app.MapPost("/api/budgets", async (BudgetLimitRequestDto dto, AppDbContext dbContext) =>
+app.MapPost("/api/budgets", async (BudgetLimitRequestDto dto, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
-        if (string.IsNullOrWhiteSpace(dto.UserId) || string.IsNullOrWhiteSpace(dto.Category) || dto.LimitAmount <= 0)
+        if (string.IsNullOrWhiteSpace(dto.Category) || dto.LimitAmount <= 0)
         {
             return Results.BadRequest(new { message = "Geçersiz bütçe bilgileri." });
         }
 
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == dto.UserId);
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -101,17 +101,23 @@ app.MapPost("/api/budgets", async (BudgetLimitRequestDto dto, AppDbContext dbCon
     {
         return Results.BadRequest(new { message = $"Bütçe kaydedilirken hata oluştu: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 8: Bütçe Limiti Silme
 // ---------------------------------------------------------
-app.MapDelete("/api/budgets/{budgetId}", async (Guid budgetId, AppDbContext dbContext) =>
+app.MapDelete("/api/budgets/{budgetId}", async (Guid budgetId, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
         var budget = await dbContext.BudgetLimits.FindAsync(budgetId);
         if (budget == null)
+        {
+            return Results.NotFound(new { message = "Bütçe limiti bulunamadı." });
+        }
+
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
+        if (user == null || budget.UserId != user.Id)
         {
             return Results.NotFound(new { message = "Bütçe limiti bulunamadı." });
         }
@@ -125,6 +131,6 @@ app.MapDelete("/api/budgets/{budgetId}", async (Guid budgetId, AppDbContext dbCo
     {
         return Results.BadRequest(new { message = $"Bütçe silinirken hata oluştu: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
     }
 }

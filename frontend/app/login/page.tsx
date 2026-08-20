@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Script from 'next/script';
 import { Sparkles, Lock, Mail, TrendingUp, Shield, Zap, ArrowRight, Eye, EyeOff, Sun, Moon, Info } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { API_BASE_URL } from '../../lib/apiClient';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
@@ -48,7 +49,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5115/api/auth/google', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken: response.credential, allowRegister: false }),
@@ -98,7 +99,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5115/api/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -130,7 +131,7 @@ export default function LoginPage() {
     setSuccessMsg(null);
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5115/api/auth/forgot-password', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),

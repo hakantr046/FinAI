@@ -14,11 +14,12 @@ public static class RecurringEndpoints
 {
     public static void MapRecurringEndpoints(this WebApplication app)
     {
-app.MapPost("/api/recurring-transactions/detect", async (DetectRecurringDto dto, AppDbContext dbContext, IAiClientService aiClient) =>
+app.MapPost("/api/recurring-transactions/detect", async (DetectRecurringDto dto, ClaimsPrincipal principal, AppDbContext dbContext, IAiClientService aiClient) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == dto.UserId);
+        var userId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId);
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -32,7 +33,7 @@ app.MapPost("/api/recurring-transactions/detect", async (DetectRecurringDto dto,
             .ToListAsync();
 
         var jsonStr = System.Text.Json.JsonSerializer.Serialize(pastTx);
-        var response = await aiClient.DetectRecurringPaymentsAsync(dto.UserId, jsonStr);
+        var response = await aiClient.DetectRecurringPaymentsAsync(userId, jsonStr);
 
         if (!response.IsSuccessful)
         {
@@ -76,14 +77,15 @@ app.MapPost("/api/recurring-transactions/detect", async (DetectRecurringDto dto,
     {
         return Results.BadRequest(new { message = $"Tespit hatası: {ex.Message}" });
     }
-}).RequireRateLimiting("gemini-policy").AllowAnonymous();
+}).RequireRateLimiting("gemini-policy").RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.5: Kullanıcının Tekrarlayan Ödemelerini Getirme
 // ---------------------------------------------------------
-app.MapGet("/api/recurring-transactions/{userId}", async (string userId, AppDbContext dbContext) =>
+app.MapGet("/api/recurring-transactions/{userId}", async (ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId || u.Id.ToString() == userId);
+    var authUserId = principal.GetUserId();
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == authUserId || u.Id.ToString() == authUserId);
     if (user == null)
     {
         return Results.Ok(new { items = new List<object>(), monthlyTotal = 0 });
@@ -108,16 +110,17 @@ app.MapGet("/api/recurring-transactions/{userId}", async (string userId, AppDbCo
     var monthlyTotal = list.Where(rt => rt.isActive).Sum(rt => rt.frequency == "Yearly" ? rt.amount / 12 : (rt.frequency == "Weekly" ? rt.amount * 4 : rt.amount));
 
     return Results.Ok(new { items = list, monthlyTotal = Math.Round(monthlyTotal, 2) });
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.6: Tekrarlayan Ödeme Ekleme veya Güncelleme
 // ---------------------------------------------------------
-app.MapPost("/api/recurring-transactions", async (RecurringTransactionDto dto, AppDbContext dbContext) =>
+app.MapPost("/api/recurring-transactions", async (RecurringTransactionDto dto, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == dto.UserId || u.Id.ToString() == dto.UserId);
+        var authUserId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == authUserId || u.Id.ToString() == authUserId);
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -157,17 +160,23 @@ app.MapPost("/api/recurring-transactions", async (RecurringTransactionDto dto, A
     {
         return Results.BadRequest(new { message = $"Kaydetme hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.7: Tekrarlayan Ödeme Silme
 // ---------------------------------------------------------
-app.MapDelete("/api/recurring-transactions/{id}", async (Guid id, AppDbContext dbContext) =>
+app.MapDelete("/api/recurring-transactions/{id}", async (Guid id, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
         var rt = await dbContext.RecurringTransactions.FindAsync(id);
         if (rt == null)
+        {
+            return Results.NotFound(new { message = "Kayıt bulunamadı." });
+        }
+
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
+        if (user == null || rt.UserId != user.Id)
         {
             return Results.NotFound(new { message = "Kayıt bulunamadı." });
         }
@@ -181,6 +190,6 @@ app.MapDelete("/api/recurring-transactions/{id}", async (Guid id, AppDbContext d
     {
         return Results.BadRequest(new { message = $"Silme hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
     }
 }

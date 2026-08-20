@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Script from 'next/script';
 import { Sparkles, Lock, Mail, TrendingUp, Shield, Zap, ArrowRight, Eye, EyeOff, Sun, Moon, User as UserIcon, ChevronDown } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { API_BASE_URL } from '../../lib/apiClient';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
@@ -59,7 +60,7 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5115/api/auth/google', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken: response.credential, allowRegister: true }),
@@ -111,7 +112,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5115/api/auth/register', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password }),

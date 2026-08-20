@@ -14,9 +14,10 @@ public static class InvoiceEndpoints
 {
     public static void MapInvoiceEndpoints(this WebApplication app)
     {
-app.MapGet("/api/invoices/{userId}", async (string userId, AppDbContext dbContext) =>
+app.MapGet("/api/invoices/{userId}", async (ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId || u.Id.ToString() == userId);
+    var callerId = principal.GetUserId();
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
     if (user == null)
     {
         return Results.Ok(new { invoices = new List<object>(), totalVat = 0, totalAmount = 0 });
@@ -44,16 +45,17 @@ app.MapGet("/api/invoices/{userId}", async (string userId, AppDbContext dbContex
     var totalAmount = list.Sum(i => i.totalAmount);
 
     return Results.Ok(new { invoices = list, totalVat, totalAmount });
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.18: Fatura Ekleme
 // ---------------------------------------------------------
-app.MapPost("/api/invoices", async (CreateInvoiceDto dto, AppDbContext dbContext) =>
+app.MapPost("/api/invoices", async (CreateInvoiceDto dto, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == dto.UserId || u.Id.ToString() == dto.UserId);
+        var callerId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -85,17 +87,24 @@ app.MapPost("/api/invoices", async (CreateInvoiceDto dto, AppDbContext dbContext
     {
         return Results.BadRequest(new { message = $"Fatura kaydetme hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.19: Fatura Silme
 // ---------------------------------------------------------
-app.MapDelete("/api/invoices/{id}", async (Guid id, AppDbContext dbContext) =>
+app.MapDelete("/api/invoices/{id}", async (Guid id, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
         var invoice = await dbContext.Invoices.FindAsync(id);
         if (invoice == null)
+        {
+            return Results.NotFound(new { message = "Fatura bulunamadı." });
+        }
+
+        var callerId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
+        if (user == null || invoice.UserId != user.Id)
         {
             return Results.NotFound(new { message = "Fatura bulunamadı." });
         }
@@ -109,6 +118,6 @@ app.MapDelete("/api/invoices/{id}", async (Guid id, AppDbContext dbContext) =>
     {
         return Results.BadRequest(new { message = $"Silme hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
     }
 }

@@ -1,4 +1,4 @@
-import { fetchWithAuth, API_BASE_URL } from '@/lib/apiClient';
+import { fetchWithAuth } from '@/lib/apiClient';
 import type { TransactionRecord } from '@/types/transaction';
 
 export async function getTransactions(userId: string, range: string = 'all'): Promise<TransactionRecord[]> {
@@ -80,6 +80,30 @@ export async function importCsv(payload: ImportCsvPayload): Promise<{ message: s
   return data;
 }
 
-export function buildExportUrl(userId: string, format: 'excel' | 'pdf', range: string): string {
-  return `${API_BASE_URL}/api/reports/export?userId=${userId}&format=${format}&range=${range}`;
+// Rapor uç noktası artık kimlik doğrulama gerektiriyor (IDOR düzeltmesi), bu yüzden
+// window.open(url) yerine (Authorization header taşıyamaz) fetchWithAuth ile
+// Blob olarak çekip indiriyoruz. 'pdf' formatı backend'de aslında sayfa açılınca
+// otomatik yazdırma çalıştıran bir HTML döner — o davranışı korumak için dosya
+// olarak indirmek yerine yeni sekmede açılır; 'excel' gerçek bir dosya indirmesidir.
+export async function exportReport(userId: string, format: 'excel' | 'pdf', range: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/reports/export?userId=${userId}&format=${format}&range=${range}`);
+  if (!res.ok) {
+    throw new Error('Rapor oluşturulamadı.');
+  }
+
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+
+  if (format === 'pdf') {
+    window.open(objectUrl, '_blank');
+  } else {
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `FinAI_Raporu_${range}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }

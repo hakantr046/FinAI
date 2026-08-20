@@ -8,7 +8,7 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { useCsvImport } from '@/hooks/useCsvImport';
 import { useBudgets } from '@/hooks/useBudgets';
 import { useAdvisorChat } from '@/hooks/useAdvisorChat';
-import { buildExportUrl } from '@/lib/services/transactionService';
+import { exportReport } from '@/lib/services/transactionService';
 import DashboardToolbar from '@/components/dashboard/DashboardToolbar';
 import BudgetAlerts from '@/components/dashboard/BudgetAlerts';
 import MetricsGrid from '@/components/dashboard/MetricsGrid';
@@ -45,7 +45,10 @@ export default function Home() {
 
   const handleExport = (format: 'excel' | 'pdf') => {
     if (!user) return;
-    window.open(buildExportUrl(user.id, format, txApi.dateRange), '_blank');
+    exportReport(user.id, format, txApi.dateRange).catch((err) => {
+      console.error(err);
+      alert(err.message || 'Rapor indirilirken bir hata oluştu.');
+    });
   };
 
   if (!isReady || !user) {

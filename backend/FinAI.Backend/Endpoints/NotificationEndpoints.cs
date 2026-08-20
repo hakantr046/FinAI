@@ -14,11 +14,12 @@ public static class NotificationEndpoints
 {
     public static void MapNotificationEndpoints(this WebApplication app)
     {
-app.MapPost("/api/notifications/detect-anomalies", async (DetectAnomaliesDto dto, AppDbContext dbContext, IAiClientService aiClient) =>
+app.MapPost("/api/notifications/detect-anomalies", async (DetectAnomaliesDto dto, ClaimsPrincipal principal, AppDbContext dbContext, IAiClientService aiClient) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == dto.UserId);
+        var callerId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId);
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -32,7 +33,7 @@ app.MapPost("/api/notifications/detect-anomalies", async (DetectAnomaliesDto dto
             .ToListAsync();
 
         var jsonStr = System.Text.Json.JsonSerializer.Serialize(pastTx);
-        var response = await aiClient.DetectAnomaliesAsync(dto.UserId, jsonStr);
+        var response = await aiClient.DetectAnomaliesAsync(callerId!, jsonStr);
 
         if (!response.IsSuccessful)
         {
@@ -69,14 +70,15 @@ app.MapPost("/api/notifications/detect-anomalies", async (DetectAnomaliesDto dto
     {
         return Results.BadRequest(new { message = $"Anomali tespiti hatası: {ex.Message}" });
     }
-}).RequireRateLimiting("gemini-policy").AllowAnonymous();
+}).RequireRateLimiting("gemini-policy").RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.9: Kullanıcının Bildirimlerini Getirme
 // ---------------------------------------------------------
-app.MapGet("/api/notifications/{userId}", async (string userId, AppDbContext dbContext) =>
+app.MapGet("/api/notifications/{userId}", async (string userId, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId || u.Id.ToString() == userId);
+    var callerId = principal.GetUserId();
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
     if (user == null)
     {
         return Results.Ok(new { notifications = new List<object>(), unreadCount = 0 });
@@ -101,17 +103,24 @@ app.MapGet("/api/notifications/{userId}", async (string userId, AppDbContext dbC
         .CountAsync(n => n.UserId == user.Id && !n.IsRead);
 
     return Results.Ok(new { notifications = list, unreadCount });
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.10: Bildirimi Okundu İşaretleme
 // ---------------------------------------------------------
-app.MapPut("/api/notifications/{id}/read", async (Guid id, AppDbContext dbContext) =>
+app.MapPut("/api/notifications/{id}/read", async (Guid id, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
+        var callerId = principal.GetUserId();
+        var caller = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId);
+        if (caller == null)
+        {
+            return Results.NotFound(new { message = "Bildirim bulunamadı." });
+        }
+
         var notification = await dbContext.Notifications.FindAsync(id);
-        if (notification == null)
+        if (notification == null || notification.UserId != caller.Id)
         {
             return Results.NotFound(new { message = "Bildirim bulunamadı." });
         }
@@ -125,16 +134,17 @@ app.MapPut("/api/notifications/{id}/read", async (Guid id, AppDbContext dbContex
     {
         return Results.BadRequest(new { message = $"Hata: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.11: Tüm Bildirimleri Okundu İşaretleme
 // ---------------------------------------------------------
-app.MapPost("/api/notifications/read-all/{userId}", async (string userId, AppDbContext dbContext) =>
+app.MapPost("/api/notifications/read-all/{userId}", async (string userId, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId || u.Id.ToString() == userId);
+        var callerId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -156,6 +166,6 @@ app.MapPost("/api/notifications/read-all/{userId}", async (string userId, AppDbC
     {
         return Results.BadRequest(new { message = $"Hata: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
     }
 }

@@ -74,3 +74,33 @@ npx expo start
 ## Güvenlik Notu
 
 `.env`, `.env.local` ve `appsettings.Development.json` dosyaları `.gitignore` ile hariç tutulmuştur ve gerçek gizli anahtarlar içermelidir — bunları asla commit etmeyin.
+
+## Production Deployment (VPS)
+
+Uygulama aynı Docker imajlarıyla bir VPS üzerinde de çalışacak şekilde tasarlandı — kod değişikliği gerekmez, sadece `.env` doldurulur ve önüne bir reverse proxy konur.
+
+1. **VPS'e Docker kur** (Ubuntu için): [Docker Engine kurulum rehberi](https://docs.docker.com/engine/install/ubuntu/) — `docker` ve `docker compose` plugin'i kurulu olmalı.
+2. **Repoyu klonla** ve `.env` dosyalarını örneklerden oluştur (yukarıdaki "Hızlı Başlangıç" adım 2-3 ile aynı), ama bu sefer gerçek/production değerlerini gir:
+   - `POSTGRES_USER` / `POSTGRES_PASSWORD` → **postgres/postgres varsayılanını mutlaka değiştir**, güçlü bir şifre kullan.
+   - `JWT_KEY` → yeni, rastgele, uzun bir secret üret (ör. `openssl rand -base64 32`).
+   - `NEXT_PUBLIC_API_URL` → backend'in dışarıdan erişilecek gerçek adresi (ör. `https://api.alanadiniz.com`).
+   - `FRONTEND_BASE_URL` → frontend'in gerçek adresi (ör. `https://alanadiniz.com`) — CORS ve şifre sıfırlama e-postalarındaki link bu değeri kullanır.
+   - `EMAIL_SENDER` / `EMAIL_SENDER_PASSWORD`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` → gerçek production hesap bilgileri.
+3. **Ayağa kaldır:**
+   ```
+   docker compose up -d --build
+   ```
+   `postgres`, `redis`, `qdrant` servisleri artık host'a port yayınlamıyor (yalnızca Docker ağı içinden erişilebilir) — dışarıdan yalnızca `frontend` (3000) ve `backend` (5115) portları açık.
+4. **Reverse proxy + HTTPS**: `frontend` (3000) ve `backend` (5115) portlarının önüne bir reverse proxy (nginx veya [Caddy](https://caddyserver.com/) — Caddy otomatik Let's Encrypt sertifikası alır, ekstra config gerektirmez) koyup gerçek alan adını buna yönlendir. Örnek Caddy `Caddyfile`:
+   ```
+   alanadiniz.com {
+       reverse_proxy localhost:3000
+   }
+   api.alanadiniz.com {
+       reverse_proxy localhost:5115
+   }
+   ```
+5. **Güncelleme almak için** (`git pull` sonrası):
+   ```
+   docker compose up -d --build
+   ```

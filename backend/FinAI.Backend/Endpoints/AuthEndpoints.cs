@@ -54,7 +54,7 @@ app.MapPost("/api/auth/register", async (RegisterDto dto, AppDbContext dbContext
     {
         return Results.BadRequest(new { message = $"Sistem Hatası: {ex.InnerException?.Message ?? ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireRateLimiting("auth-policy").AllowAnonymous();
 
 // ---------------------------------------------------------
 // AUTH ENDPOINT 2: GİRİŞ YAP (LOGIN & JWT + REFRESH TOKEN)
@@ -87,7 +87,7 @@ app.MapPost("/api/auth/login", async (LoginDto dto, AppDbContext dbContext, ITok
     {
         return Results.BadRequest(new { message = $"Giriş Hatası: {ex.InnerException?.Message ?? ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireRateLimiting("auth-policy").AllowAnonymous();
 
 // ---------------------------------------------------------
 // AUTH ENDPOINT 2.1: GOOGLE İLE GİRİŞ (SIGN IN WITH GOOGLE)
@@ -237,7 +237,7 @@ app.MapPost("/api/auth/revoke", async (RevokeTokenRequestDto dto, AppDbContext d
 // ---------------------------------------------------------
 // AUTH ENDPOINT 5: FORGOT PASSWORD (E-POSTA İLE ŞİFRE SIFIRLAMA LİNKİ)
 // ---------------------------------------------------------
-app.MapPost("/api/auth/forgot-password", async (ForgotPasswordDto dto, AppDbContext dbContext, IEmailService emailService) =>
+app.MapPost("/api/auth/forgot-password", async (ForgotPasswordDto dto, AppDbContext dbContext, IEmailService emailService, IConfiguration config) =>
 {
     try
     {
@@ -258,7 +258,8 @@ app.MapPost("/api/auth/forgot-password", async (ForgotPasswordDto dto, AppDbCont
         user.ResetTokenExpiresAt = DateTime.UtcNow.AddMinutes(30);
         await dbContext.SaveChangesAsync();
 
-        var resetLink = $"http://localhost:3000/reset-password?email={Uri.EscapeDataString(user.Email)}&token={resetToken}";
+        var frontendBaseUrl = config["Frontend:BaseUrl"] ?? "http://localhost:3000";
+        var resetLink = $"{frontendBaseUrl}/reset-password?email={Uri.EscapeDataString(user.Email)}&token={resetToken}";
 
         // E-Posta gönder
         var isSent = await emailService.SendPasswordResetEmailAsync(user.Email, resetLink);

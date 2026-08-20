@@ -16,22 +16,27 @@ public static class AdvisorEndpoints
     {
         // İki yol da (geriye dönük uyumluluk için) aynı sohbet mantığını paylaşır — tek kaynak (DRY)
         app.MapPost("/api/advisor/chat", HandleChatAsync)
-            .RequireRateLimiting("gemini-policy").AllowAnonymous();
+            .RequireRateLimiting("gemini-policy").RequireAuthorization();
 
         app.MapPost("/api/chat", HandleChatAsync)
-            .RequireRateLimiting("gemini-policy").AllowAnonymous();
+            .RequireRateLimiting("gemini-policy").RequireAuthorization();
     }
 
-    private static async Task<IResult> HandleChatAsync(AdvisorChatRequestDto dto, IAiClientService aiClient)
+    private static async Task<IResult> HandleChatAsync(AdvisorChatRequestDto dto, ClaimsPrincipal principal, IAiClientService aiClient)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(dto.UserId) || string.IsNullOrWhiteSpace(dto.Message))
+            var callerId = principal.GetUserId();
+            if (string.IsNullOrWhiteSpace(callerId))
             {
-                return Results.BadRequest(new { message = "Kullanıcı ID ve mesaj zorunludur." });
+                return Results.Unauthorized();
+            }
+            if (string.IsNullOrWhiteSpace(dto.Message))
+            {
+                return Results.BadRequest(new { message = "Mesaj zorunludur." });
             }
 
-            var response = await aiClient.ChatWithAdvisorAsync(dto.UserId, dto.Message, dto.History, dto.ContextJson);
+            var response = await aiClient.ChatWithAdvisorAsync(callerId, dto.Message, dto.History, dto.ContextJson);
             return Results.Ok(new { reply = response.Reply });
         }
         catch (Exception ex)

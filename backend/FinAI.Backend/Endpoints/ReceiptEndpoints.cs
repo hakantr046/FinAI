@@ -121,12 +121,12 @@ app.MapPost("/api/receipts/upload", async (HttpRequest request, ClaimsPrincipal 
 // ---------------------------------------------------------
 // ENDPOINT 9.2: Fişi İşlem Olarak Onaylama & Kaydetme
 // ---------------------------------------------------------
-app.MapPost("/api/receipts/{id}/confirm", async (Guid id, ConfirmReceiptDto dto, AppDbContext dbContext) =>
+app.MapPost("/api/receipts/{id}/confirm", async (Guid id, ConfirmReceiptDto dto, AppDbContext dbContext, ClaimsPrincipal principal) =>
 {
     try
     {
         var receipt = await dbContext.Receipts.Include(r => r.User).FirstOrDefaultAsync(r => r.Id == id);
-        if (receipt == null)
+        if (receipt == null || receipt.User.ExternalUserId != principal.GetUserId())
         {
             return Results.NotFound(new { message = "Fiş bulunamadı." });
         }
@@ -181,14 +181,14 @@ app.MapPost("/api/receipts/{id}/confirm", async (Guid id, ConfirmReceiptDto dto,
     {
         return Results.BadRequest(new { message = $"Fiş onaylama hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.3: Kullanıcının Fiş Geçmişini Getirme
 // ---------------------------------------------------------
-app.MapGet("/api/receipts/{userId}", async (string userId, AppDbContext dbContext) =>
+app.MapGet("/api/receipts/{userId}", async (string userId, AppDbContext dbContext, ClaimsPrincipal principal) =>
 {
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId);
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
     if (user == null)
     {
         return Results.Ok(new List<object>());
@@ -211,6 +211,6 @@ app.MapGet("/api/receipts/{userId}", async (string userId, AppDbContext dbContex
         .ToListAsync();
 
     return Results.Ok(list);
-}).AllowAnonymous();
+}).RequireAuthorization();
     }
 }

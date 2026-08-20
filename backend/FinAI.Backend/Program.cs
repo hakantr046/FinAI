@@ -36,6 +36,13 @@ builder.Services.AddRateLimiter(options =>
         limiterOptions.Window = TimeSpan.FromMinutes(1);
         limiterOptions.QueueLimit = 0;
     });
+    // Brute-force koruması: login/register denemeleri IP başına sınırlanır
+    options.AddFixedWindowLimiter("auth-policy", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 5;
+        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueLimit = 0;
+    });
 });
 
 // JWT Authentication Yapılandırması
@@ -65,12 +72,13 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
 });
 
-// CORS Politikası
+// CORS Politikası (frontend origin'i config/env'den okunur, VPS'te .env ile değişir)
+var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"] ?? "http://localhost:3000";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowNextJs", policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins(frontendBaseUrl)
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -83,6 +91,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseHttpsRedirection();
 app.UseCors("AllowNextJs");
 app.UseRateLimiter();
 app.UseAuthentication();

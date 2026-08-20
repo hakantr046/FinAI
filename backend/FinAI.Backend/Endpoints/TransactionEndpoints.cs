@@ -16,27 +16,29 @@ public static class TransactionEndpoints
 {
     public static void MapTransactionEndpoints(this WebApplication app)
     {
-app.MapPost("/api/parse-transaction", async (TransactionRequestDto dto, IAiClientService aiClient, IPiiMaskingService piiMasker, AppDbContext dbContext, IBudgetAlertService budgetAlerts) =>
+app.MapPost("/api/parse-transaction", async (TransactionRequestDto dto, ClaimsPrincipal principal, IAiClientService aiClient, IPiiMaskingService piiMasker, AppDbContext dbContext, IBudgetAlertService budgetAlerts) =>
 {
+    var callerUserId = principal.GetUserId();
+
     // Hassas verileri (IBAN, Kredi Kartı, Telefon vb.) maskele
     var maskedText = piiMasker.MaskSensitiveData(dto.InputText);
 
     // Maskelenmiş veriyi AI servisine gönder
-    var parsedResult = await aiClient.ProcessTransactionAsync(dto.UserId, maskedText);
+    var parsedResult = await aiClient.ProcessTransactionAsync(callerUserId, maskedText);
 
     if (!parsedResult.IsSuccessful)
     {
         return Results.BadRequest(new { message = "İşlem ayrıştırılamadı. AI servisini kontrol edin." });
     }
 
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == dto.UserId);
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerUserId);
     if (user == null)
     {
         user = new User
         {
-            ExternalUserId = dto.UserId,
-            Email = dto.UserId,
-            Name = dto.UserId,
+            ExternalUserId = callerUserId!,
+            Email = callerUserId!,
+            Name = callerUserId!,
             PasswordHash = "DEFAULT_HASH"
         };
         dbContext.Users.Add(user);
@@ -84,14 +86,14 @@ app.MapPost("/api/parse-transaction", async (TransactionRequestDto dto, IAiClien
         TransactionId = transaction.Id,
         ParsedData = parsedResult
     });
-}).RequireRateLimiting("gemini-policy").AllowAnonymous();
+}).RequireRateLimiting("gemini-policy").RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 4: Geçmiş Harcamaları Getirme (Filtreli)
 // ---------------------------------------------------------
-app.MapGet("/api/transactions/{userId}", async (string userId, string? range, AppDbContext dbContext) =>
+app.MapGet("/api/transactions/{userId}", async (string? range, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId);
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
     if (user == null)
     {
         return Results.Ok(new List<object>());
@@ -119,14 +121,14 @@ app.MapGet("/api/transactions/{userId}", async (string userId, string? range, Ap
         .ToListAsync();
 
     return Results.Ok(list);
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 4.1: Finansal Rapor Dışa Aktarma (Excel/PDF)
 // ---------------------------------------------------------
-app.MapGet("/api/reports/export", async (string userId, string? format, string? range, AppDbContext dbContext) =>
+app.MapGet("/api/reports/export", async (string? format, string? range, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId);
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
     if (user == null)
     {
         return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -200,7 +202,7 @@ app.MapGet("/api/reports/export", async (string userId, string? format, string? 
 
         return Results.File(resultBytes, "text/csv; charset=utf-8", $"FinAI_Raporu_{rangeText}.csv");
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 app.MapPost("/api/transactions/import", async (HttpRequest request, ClaimsPrincipal principal, AppDbContext dbContext, IAiClientService aiClient, IPiiMaskingService piiMasker) =>
 {
     try
@@ -383,12 +385,18 @@ app.MapPost("/api/transactions/import", async (HttpRequest request, ClaimsPrinci
         return Results.BadRequest(new { message = $"CSV aktarım hatası: {ex.Message}" });
     }
 }).RequireRateLimiting("gemini-policy").DisableAntiforgery().RequireAuthorization();
-app.MapPut("/api/transactions/{id}", async (Guid id, UpdateTransactionDto dto, AppDbContext dbContext) =>
+app.MapPut("/api/transactions/{id}", async (Guid id, UpdateTransactionDto dto, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
         var tx = await dbContext.Transactions.FindAsync(id);
         if (tx == null)
+        {
+            return Results.NotFound(new { message = "İşlem bulunamadı." });
+        }
+
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
+        if (user == null || tx.UserId != user.Id)
         {
             return Results.NotFound(new { message = "İşlem bulunamadı." });
         }
@@ -406,17 +414,23 @@ app.MapPut("/api/transactions/{id}", async (Guid id, UpdateTransactionDto dto, A
     {
         return Results.BadRequest(new { message = $"İşlem güncellenirken hata oluştu: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 11: İşlem Silme (DELETE)
 // ---------------------------------------------------------
-app.MapDelete("/api/transactions/{id}", async (Guid id, AppDbContext dbContext) =>
+app.MapDelete("/api/transactions/{id}", async (Guid id, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
         var tx = await dbContext.Transactions.FindAsync(id);
         if (tx == null)
+        {
+            return Results.NotFound(new { message = "İşlem bulunamadı." });
+        }
+
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == principal.GetUserId());
+        if (user == null || tx.UserId != user.Id)
         {
             return Results.NotFound(new { message = "İşlem bulunamadı." });
         }
@@ -429,6 +443,6 @@ app.MapDelete("/api/transactions/{id}", async (Guid id, AppDbContext dbContext) 
     {
         return Results.BadRequest(new { message = $"İşlem silinirken hata oluştu: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
     }
 }

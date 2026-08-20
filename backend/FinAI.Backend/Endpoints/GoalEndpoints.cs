@@ -14,9 +14,10 @@ public static class GoalEndpoints
 {
     public static void MapGoalEndpoints(this WebApplication app)
     {
-app.MapGet("/api/goals/{userId}", async (string userId, AppDbContext dbContext) =>
+app.MapGet("/api/goals/{userId}", async (ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId || u.Id.ToString() == userId);
+    var callerId = principal.GetUserId();
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
     if (user == null)
     {
         return Results.Ok(new List<object>());
@@ -39,16 +40,17 @@ app.MapGet("/api/goals/{userId}", async (string userId, AppDbContext dbContext) 
         .ToListAsync();
 
     return Results.Ok(list);
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.13: Yeni Finansal Hedef Ekleme
 // ---------------------------------------------------------
-app.MapPost("/api/goals", async (CreateGoalDto dto, AppDbContext dbContext) =>
+app.MapPost("/api/goals", async (CreateGoalDto dto, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == dto.UserId || u.Id.ToString() == dto.UserId);
+        var callerId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -75,17 +77,24 @@ app.MapPost("/api/goals", async (CreateGoalDto dto, AppDbContext dbContext) =>
     {
         return Results.BadRequest(new { message = $"Hedef oluşturma hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.14: Hedeften Para Ekleme (Deposit)
 // ---------------------------------------------------------
-app.MapPost("/api/goals/{id}/deposit", async (Guid id, DepositGoalDto dto, AppDbContext dbContext) =>
+app.MapPost("/api/goals/{id}/deposit", async (Guid id, DepositGoalDto dto, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
         var goal = await dbContext.Goals.FindAsync(id);
         if (goal == null)
+        {
+            return Results.NotFound(new { message = "Hedef bulunamadı." });
+        }
+
+        var callerId = principal.GetUserId();
+        var owner = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId);
+        if (owner == null || goal.UserId != owner.Id)
         {
             return Results.NotFound(new { message = "Hedef bulunamadı." });
         }
@@ -103,17 +112,24 @@ app.MapPost("/api/goals/{id}/deposit", async (Guid id, DepositGoalDto dto, AppDb
     {
         return Results.BadRequest(new { message = $"Deposit hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.15: Hedef Silme
 // ---------------------------------------------------------
-app.MapDelete("/api/goals/{id}", async (Guid id, AppDbContext dbContext) =>
+app.MapDelete("/api/goals/{id}", async (Guid id, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
         var goal = await dbContext.Goals.FindAsync(id);
         if (goal == null)
+        {
+            return Results.NotFound(new { message = "Hedef bulunamadı." });
+        }
+
+        var callerId = principal.GetUserId();
+        var owner = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId);
+        if (owner == null || goal.UserId != owner.Id)
         {
             return Results.NotFound(new { message = "Hedef bulunamadı." });
         }
@@ -127,17 +143,24 @@ app.MapDelete("/api/goals/{id}", async (Guid id, AppDbContext dbContext) =>
     {
         return Results.BadRequest(new { message = $"Silme hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.15B: Hedef Güncelleme (Target/Deadline Update)
 // ---------------------------------------------------------
-app.MapPut("/api/goals/{id}", async (Guid id, UpdateGoalDto dto, AppDbContext dbContext) =>
+app.MapPut("/api/goals/{id}", async (Guid id, UpdateGoalDto dto, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
         var goal = await dbContext.Goals.FindAsync(id);
         if (goal == null)
+        {
+            return Results.NotFound(new { message = "Hedef bulunamadı." });
+        }
+
+        var callerId = principal.GetUserId();
+        var owner = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId);
+        if (owner == null || goal.UserId != owner.Id)
         {
             return Results.NotFound(new { message = "Hedef bulunamadı." });
         }
@@ -163,17 +186,22 @@ app.MapPut("/api/goals/{id}", async (Guid id, UpdateGoalDto dto, AppDbContext db
     {
         return Results.BadRequest(new { message = $"Hedef güncelleme hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.16: Gemini Yapay Zeka Hedef Projeksiyonu
 // ---------------------------------------------------------
-app.MapPost("/api/goals/{id}/ai-projection", async (Guid id, AppDbContext dbContext, IAiClientService aiClient) =>
+app.MapPost("/api/goals/{id}/ai-projection", async (Guid id, ClaimsPrincipal principal, AppDbContext dbContext, IAiClientService aiClient) =>
 {
     try
     {
         var goal = await dbContext.Goals.Include(g => g.User).FirstOrDefaultAsync(g => g.Id == id);
         if (goal == null)
+        {
+            return Results.NotFound(new { message = "Hedef bulunamadı." });
+        }
+
+        if (goal.User.ExternalUserId != principal.GetUserId())
         {
             return Results.NotFound(new { message = "Hedef bulunamadı." });
         }
@@ -197,6 +225,6 @@ app.MapPost("/api/goals/{id}/ai-projection", async (Guid id, AppDbContext dbCont
     {
         return Results.BadRequest(new { message = $"AI Projeksiyon hatası: {ex.Message}" });
     }
-}).RequireRateLimiting("gemini-policy").AllowAnonymous();
+}).RequireRateLimiting("gemini-policy").RequireAuthorization();
     }
 }

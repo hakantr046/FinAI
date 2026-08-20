@@ -14,9 +14,10 @@ public static class AnalyticsEndpoints
 {
     public static void MapAnalyticsEndpoints(this WebApplication app)
     {
-app.MapGet("/api/insights/{userId}", async (string userId, IAiClientService aiClient, AppDbContext dbContext) =>
+app.MapGet("/api/insights/{userId}", async (string userId, ClaimsPrincipal principal, IAiClientService aiClient, AppDbContext dbContext) =>
 {
-    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId);
+    var callerId = principal.GetUserId();
+    var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId);
     if (user == null)
     {
         return Results.NotFound("Kullanıcı bulunamadı.");
@@ -44,7 +45,7 @@ app.MapGet("/api/insights/{userId}", async (string userId, IAiClientService aiCl
 
     var summaryJson = System.Text.Json.JsonSerializer.Serialize(summary);
 
-    var insight = await aiClient.GetFinancialInsightAsync(userId, summaryJson);
+    var insight = await aiClient.GetFinancialInsightAsync(callerId!, summaryJson);
 
     return Results.Ok(new
     {
@@ -52,12 +53,13 @@ app.MapGet("/api/insights/{userId}", async (string userId, IAiClientService aiCl
         RiskLevel = insight.RiskLevel,
         Recommendations = insight.Recommendations
     });
-}).RequireRateLimiting("gemini-policy").AllowAnonymous();
-app.MapGet("/api/cashflow/forecast/{userId}", async (string userId, AppDbContext dbContext) =>
+}).RequireRateLimiting("gemini-policy").RequireAuthorization();
+app.MapGet("/api/cashflow/forecast/{userId}", async (string userId, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId || u.Id.ToString() == userId);
+        var callerId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -117,16 +119,17 @@ app.MapGet("/api/cashflow/forecast/{userId}", async (string userId, AppDbContext
     {
         return Results.BadRequest(new { message = $"Forecast hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // ---------------------------------------------------------
 // ENDPOINT 9.11C: Gamification & Finansal Sağlık Skoru (0-100)
 // ---------------------------------------------------------
-app.MapGet("/api/gamification/score/{userId}", async (string userId, AppDbContext dbContext) =>
+app.MapGet("/api/gamification/score/{userId}", async (string userId, ClaimsPrincipal principal, AppDbContext dbContext) =>
 {
     try
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == userId || u.Id.ToString() == userId);
+        var callerId = principal.GetUserId();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == callerId || u.Id.ToString() == callerId);
         if (user == null)
         {
             return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
@@ -190,6 +193,6 @@ app.MapGet("/api/gamification/score/{userId}", async (string userId, AppDbContex
     {
         return Results.BadRequest(new { message = $"Gamification hatası: {ex.Message}" });
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
     }
 }
